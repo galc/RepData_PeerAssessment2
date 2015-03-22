@@ -1,0 +1,108 @@
+---
+title : "Reproducible Research - Peer Assesment 2"
+author: "Gal Cohen"
+date  : "Sunday, March 22, 2015"
+output: html_document
+---
+
+## Impact of Severe Weather Events on Health & Economy 
+
+### Synopsis
+This report analyzes data taken from the U.S.National Oceanic and Atmospheric Administration (NOAA), aiming to produce insights for government to the type of events that are most harmful to population health and those that have the greatest econimic impact, so that it would be able to better decide and prioritize resources to handle these different type of events.
+
+### Library Settings
+```{r echo=FALSE}
+library(R.utils)
+library(ggplot2)
+library(dplyr)
+# Setting the working directory to the csv location
+# You should update this URL to point to your project location 
+setwd("C:\\Users\\Gal\\Documents\\GitHub\\RepData_PeerAssessment2")
+```
+### Data Processing
+
+For this analysis, the dataset is loaded once (only if not downloaded already) and extratced from a compressed form (bz2) into .csv.
+```{r}
+# Download and uncompress the file, saving it locally as .csv if not downloaded already
+if(!file.exists("StormData.csv")) {
+  download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", destfile = "StormData.csv")
+}
+```
+
+```{r}
+# Read the .csv file into stormData
+stormData <- read.csv("StormData.csv")
+```
+Group the event types into similar categories so that the weather would be analyzed per these main categories:
+```{r}
+event_types = data.frame(unique(stormData$EVTYPE))
+# alphabetize for easier finding of groups
+event_types = event_types %>% arrange(unique.stormData.EVTYPE.)
+
+# first, copy the original data frame rather than alterting it in-place (data set is large and want to avoid re-loading if errors occur)
+stormData_clean = stormData
+stormData_clean$EVTYPE = as.character(stormData_clean$EVTYPE)
+
+evtype_groupings = rep(0,nrow(stormData))
+evtype_groupings[grepl("snow|ice|wintry|freez|blizzard|cold|winter", tolower(stormData_clean$EVTYPE))] = "WINTRY"
+evtype_groupings[grepl("rain|shower", tolower(stormData_clean$EVTYPE), fixed=T)] = "RAIN"
+evtype_groupings[grepl("thunder|lightning", tolower(stormData_clean$EVTYPE), fixed=T)] = "LIGHTNING"
+evtype_groupings[grepl("hurricane|tropical|typhoon", tolower(stormData_clean$EVTYPE), fixed=T)] = "HURRICANE"
+evtype_groupings[grepl("dry|drought", tolower(stormData_clean$EVTYPE), fixed=T)] = "DRY"
+evtype_groupings[grepl("heat|warm", tolower(stormData_clean$EVTYPE), fixed=T)] = "HEAT"
+
+stormData_clean$evtype_groupings = evtype_groupings
+stormData_clean$evtype_clean = ifelse(stormData_clean$evtype_groupings==0, stormData_clean$EVTYPE, stormData_clean$evtype_groupings)
+
+event_type_groups = data.frame(unique(stormData_clean$evtype_clean))
+```
+Persons impacted would implies on the "Health impact" 
+```{r}
+stormData_clean$PersonsImpacted = stormData_clean$INJURIES + stormData_clean$FATALITIES
+```
+Properties impacted implies on the "Economic impact".
+```{r}
+stormData_clean$economicImpact = stormData_clean$PROPDMG + stormData_clean$CROPDMG
+```
+
+### Results (United States specific)
+#####Most harmful events with respect to population health
+Tornados are the most harmful weather events with respect to population health, followed by Extreme heat, high winds, and floods. 
+The following is a plot of the top 10 extreme weather event types (ranked by impact on population health)
+```{r}
+df_agg_pop_health = 
+  stormData_clean %>%  
+  group_by(evtype_clean) %>%
+  summarise(total_fatalities = sum(FATALITIES),
+            total_injuries = sum(INJURIES),
+            PersonsImpacted = sum(PersonsImpacted)) %>%
+  arrange(desc(PersonsImpacted)) %>%
+  filter(row_number() < 11)
+
+ggplot(df_agg_pop_health, 
+       aes(x=reorder(evtype_clean, -PersonsImpacted), y=PersonsImpacted)) +
+  geom_bar(stat="identity") + 
+  ggtitle("Injury and Fatality Counts by Severe Weather") +
+  ylab("Total Persons Impacted") +
+  theme(axis.title.x = element_blank())
+```
+
+#####Events types with the greatest economic impact
+Tornados are the most influencial on economic impact, followed by floods.
+
+The following is a plot of the top 10 types of extreme weather ranked by their impact on the economy.
+```{r}
+df_agg_econ = 
+  stormData_clean %>%
+  group_by(evtype_clean) %>%
+  summarise(totEconomicImpact = sum(economicImpact)) %>%
+  arrange(desc(totEconomicImpact)) %>%
+  filter(row_number() < 11)
+
+ggplot(df_agg_econ, 
+       aes(x=reorder(evtype_clean, -totEconomicImpact), y=totEconomicImpact)) +
+  geom_bar(stat="identity") + 
+  ggtitle("Economic Impact by Severe Weather") +
+  ylab("Total Economic Impact") +
+  theme(axis.title.x = element_blank())
+```
